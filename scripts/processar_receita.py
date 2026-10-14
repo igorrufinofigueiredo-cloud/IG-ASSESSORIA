@@ -64,9 +64,17 @@ def req(url, method="GET", headers=None, auth=True):
     return urllib.request.Request(url, method=method, headers=h)
 
 
-def listar(caminho=""):
-    with urllib.request.urlopen(req(WEBDAV + caminho, "PROPFIND", {"Depth": "1"}), timeout=120) as r:
-        arvore = ET.fromstring(r.read())
+def listar(caminho="", tentativas=8):
+    for n in range(1, tentativas + 1):
+        try:
+            with urllib.request.urlopen(req(WEBDAV + caminho, "PROPFIND", {"Depth": "1"}), timeout=180) as r:
+                arvore = ET.fromstring(r.read())
+            break
+        except Exception as e:
+            log(f"  listagem de '{caminho or '/'}': tentativa {n}/{tentativas} falhou ({e})")
+            if n == tentativas:
+                raise
+            time.sleep(min(120, 20 * n))
     ns = {"d": "DAV:"}
     itens = []
     for resp in arvore.findall("d:response", ns):

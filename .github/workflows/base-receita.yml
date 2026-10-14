@@ -36,6 +36,7 @@ jobs:
           MES_ARG: ${{ github.event.inputs.mes && format('--mes {0}', github.event.inputs.mes) || '' }}
         run: |
           # O andamento vai para a issue 1 a cada 2 minutos (dá para acompanhar sem abrir o log).
+          set +e   # erro do script não pode pular o aviso final na issue
           python -u scripts/processar_receita.py --saida saida $MES_ARG > log.txt 2>&1 &
           PID=$!
           atualizar() { gh api -X PATCH "repos/${{ github.repository }}/issues/1" -f body="$(printf '%s\n\n```\n%s\n```' "$1" "$(tail -n 40 log.txt)")" > /dev/null || true; }
