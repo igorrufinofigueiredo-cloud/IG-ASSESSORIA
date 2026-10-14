@@ -1,14 +1,17 @@
 """Base de prospecção da IG Assessoria a partir dos dados abertos do CNPJ (Receita Federal).
 
 Baixa o mês mais recente do compartilhamento público da Receita, separa as empresas ATIVAS
-dos nichos da IG (odontologia, clínicas, estética, advocacia, contabilidade, fisioterapia,
-psicologia, nutrição e barbearias), junta razão social, porte e MEI, e grava um arquivo por
-estado e nicho, compactado e cifrado (só o CRM tem a chave para abrir).
+dos nichos listados em scripts/nichos.json (atividade principal), junta razão social, porte
+e MEI, limpa os telefones e grava um arquivo por estado e nicho, compactado e cifrado (só o
+CRM tem a chave para abrir).
+
+Os dados intermediários ficam num SQLite em disco: o Brasil inteiro com dezenas de nichos não
+cabe com folga na memória do runner.
 
 Uso: python scripts/processar_receita.py --saida saida/
 Teste local: python scripts/processar_receita.py --local pasta_com_zips --mes 2026-09 --saida saida/
 """
-import argparse, base64, csv, gzip, io, json, os, re, struct, sys, time, unicodedata, urllib.parse, urllib.request, zipfile
+import argparse, base64, csv, gzip, io, json, os, re, sqlite3, struct, threading, time, unicodedata, urllib.parse, urllib.request, zipfile
 from concurrent.futures import ThreadPoolExecutor
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -21,33 +24,37 @@ WEBDAV = os.environ.get("RFB_WEBDAV_URL", "https://arquivos.receitafederal.gov.b
 TOKEN = os.environ.get("RFB_SHARE_TOKEN", "YggdBLfdninEJX9")  # link público da Receita, não é segredo
 MUNICIPIOS_IBGE = "https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/csv/municipios.csv"
 ESTADOS_IBGE = "https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/csv/estados.csv"
-
-# Nicho da IG -> CNAEs (atividade principal)
-NICHOS = {
-    "odontologia": {"8630504"},
-    "clinica": {"8630501", "8630502", "8630503"},
-    "estetica": {"9602502"},
-    "advocacia": {"6911701"},
-    "contabilidade": {"6920601", "6920602"},
-    "fisioterapia": {"8650004"},
-    "psicologia": {"8650003"},
-    "nutricao": {"8650002"},
-    "barbearia": {"9602501"},  # cabeleireiros: só entra quem tem BARB no nome
-}
-CNAE_NICHO = {c: n for n, cs in NICHOS.items() for c in cs}
-CNAE_DESC = {
-    "8630504": "Atividade odontológica", "8630501": "Atividade médica ambulatorial com recursos para procedimentos cirúrgicos",
-    "8630502": "Atividade médica ambulatorial com recursos para exames complementares", "8630503": "Atividade médica ambulatorial restrita a consultas",
-    "9602502": "Atividades de estética e outros serviços de cuidados com a beleza", "6911701": "Serviços advocatícios",
-    "6920601": "Atividades de contabilidade", "6920602": "Atividades de consultoria e auditoria contábil e tributária",
-    "8650004": "Atividades de fisioterapia", "8650003": "Atividades de psicologia e psicanálise", "8650002": "Atividades de profissionais da nutrição",
-    "9602501": "Cabeleireiros, manicure e pedicure",
-}
 PORTE = {"01": "MICRO EMPRESA", "03": "EMPRESA DE PEQUENO PORTE", "05": "DEMAIS"}
+CAMPOS = ["cnpj", "fantasia", "razao", "ibge", "bairro", "endereco", "cep", "tel1", "tel2", "email",
+          "abertura", "cnae", "porte", "mei", "capital", "matriz"]
+
+BAIXADO = {"bytes": 0}
+_trava = threading.Lock()
 
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def carregar_nichos(caminho):
+    nichos = json.loads(Path(caminho).read_text(encoding="utf-8"))
+    por_cnae = {}
+    for n in nichos:
+        for c in n["cnaes"]:
+            por_cnae.setdefault(c, []).append(n)
+    return nichos, por_cnae
+
+
+def nicho_de(cnae, fantasia, razao, por_cnae):
+    """CNAE principal -> nicho. Quando dois nichos dividem o CNAE (barbearia e salão), decide pelo nome."""
+    nome = (fantasia + " " + razao).upper()
+    for n in por_cnae.get(cnae, ()):
+        if n.get("nome_tem") and n["nome_tem"] not in nome:
+            continue
+        if n.get("nome_sem") and n["nome_sem"] in nome:
+            continue
+        return n["id"]
+    return None
 
 
 def req(url, method="GET", headers=None, auth=True):
@@ -70,7 +77,7 @@ def listar(caminho=""):
     return itens
 
 
-def baixar(url, destino, tamanho=0, auth=True, tentativas=8):
+def baixar(url, destino, tamanho=0, auth=True, tentativas=10):
     destino.parent.mkdir(parents=True, exist_ok=True)
     for n in range(1, tentativas + 1):
         ja = destino.stat().st_size if destino.exists() else 0
@@ -82,6 +89,8 @@ def baixar(url, destino, tamanho=0, auth=True, tentativas=8):
                     open(destino, "ab" if ja and r.status == 206 else "wb") as f:
                 while bloco := r.read(1 << 20):
                     f.write(bloco)
+                    with _trava:
+                        BAIXADO["bytes"] += len(bloco)
             if not tamanho or destino.stat().st_size == tamanho:
                 return destino
             raise IOError(f"tamanho {destino.stat().st_size} != {tamanho}")
@@ -97,11 +106,6 @@ def linhas_zip(caminho):
             with io.TextIOWrapper(z.open(membro), encoding="latin-1", newline="") as txt:
                 for linha in csv.reader((l.replace("\x00", "") for l in txt), delimiter=";", quotechar='"'):
                     yield linha
-
-
-def slug(s):
-    s = unicodedata.normalize("NFD", (s or "").lower())
-    return re.sub(r"[^a-z0-9]+", "-", "".join(c for c in s if unicodedata.category(c) != "Mn")).strip("-")
 
 
 def fone(ddd, num):
@@ -139,17 +143,35 @@ def mapa_municipios(pasta, local):
     return m
 
 
+def abrir_banco(caminho):
+    caminho.unlink(missing_ok=True)
+    db = sqlite3.connect(caminho)
+    db.executescript("""
+        PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE; PRAGMA cache_size=-400000;
+        CREATE TABLE est(basico TEXT, uf TEXT, nicho TEXT, ibge TEXT, ddd TEXT, cnpj TEXT, fantasia TEXT, bairro TEXT,
+                         endereco TEXT, cep TEXT, t1 TEXT, t2 TEXT, email TEXT, abertura TEXT, cnae TEXT, matriz INT);
+        CREATE TABLE tel(t TEXT, basico TEXT, contador INT);
+        CREATE TABLE emp(basico TEXT PRIMARY KEY, razao TEXT, porte TEXT, capital REAL) WITHOUT ROWID;
+        CREATE TABLE mei(basico TEXT PRIMARY KEY) WITHOUT ROWID;
+    """)
+    return db
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--saida", default="saida")
     ap.add_argument("--local", help="pasta com os .zip já baixados (teste)")
     ap.add_argument("--mes", help="AAAA-MM; padrão: o mais recente publicado")
     ap.add_argument("--chave", default=str(Path(__file__).with_name("chave_publica.pem")))
+    ap.add_argument("--nichos", default=str(Path(__file__).with_name("nichos.json")))
     a = ap.parse_args()
 
     saida = Path(a.saida); saida.mkdir(parents=True, exist_ok=True)
     trabalho = Path(a.local) if a.local else Path("dados_rf")
+    trabalho.mkdir(parents=True, exist_ok=True)
     chave_publica = serialization.load_pem_public_key(Path(a.chave).read_bytes())
+    nichos, por_cnae = carregar_nichos(a.nichos)
+    log(f"{len(nichos)} nichos, {len(por_cnae)} CNAEs")
 
     if a.local:
         mes = a.mes or "local"
@@ -160,45 +182,51 @@ def main():
         arquivos = dict(listar(mes + "/"))
         log(f"mês {mes}: {len(arquivos)} arquivos")
 
-    # O servidor da Receita é lento por conexão: baixa 4 arquivos ao mesmo tempo, já na ordem em que serão lidos.
-    precisos = sorted(n for n in arquivos if re.match(r"(estabelecimentos|empresas|simples)", n.lower()))
-    ordem = {n: i for i, n in enumerate(sorted(precisos, key=lambda n: (0 if n.lower().startswith("estab") else 1 if n.lower().startswith("empresas") else 2, n)))}
-    pool = ThreadPoolExecutor(max_workers=4)
-    futuros = {} if a.local else {n: pool.submit(baixar, f"{WEBDAV}{mes}/{n}", trabalho / n, arquivos.get(n, 0)) for n in sorted(precisos, key=ordem.get)}
+    # O servidor da Receita é lento por conexão: baixa vários arquivos ao mesmo tempo, na ordem em que serão lidos.
+    def grupo(n):
+        n = n.lower()
+        return 0 if n.startswith("estab") else 1 if n.startswith("empresas") else 2 if n.startswith("simples") else 3 if n.startswith("cnae") else 9
+    precisos = sorted((n for n in arquivos if grupo(n) < 9), key=lambda n: (grupo(n), n))
+    total_bytes = sum(arquivos.get(n, 0) for n in precisos)
+    pool = ThreadPoolExecutor(max_workers=6)
+    futuros = {} if a.local else {n: pool.submit(baixar, f"{WEBDAV}{mes}/{n}", trabalho / n, arquivos.get(n, 0)) for n in precisos}
+
+    parar = threading.Event()
+    def andamento():
+        inicio = time.time()
+        while not parar.wait(90):
+            mb = BAIXADO["bytes"] / 1e6
+            vel = mb / max(1, time.time() - inicio)
+            log(f"  download: {mb:,.0f} de {total_bytes / 1e6:,.0f} MB ({vel:.1f} MB/s)")
+    if not a.local:
+        threading.Thread(target=andamento, daemon=True).start()
 
     def obter(nome):
-        if a.local:
-            return trabalho / nome
-        return futuros[nome].result()
+        return trabalho / nome if a.local else futuros[nome].result()
 
     def apagar(p):
         if not a.local:
             p.unlink(missing_ok=True)
 
-    municipios = mapa_municipios(trabalho if a.local else trabalho, a.local)
-    partes = {}      # (uf, nicho) -> lista de linhas
-    precisa = {}     # cnpj_basico -> [linhas que esperam razão social / porte / MEI]
-    ddd_de = {}      # código IBGE -> DDD da cidade
-    uso_tel = {}     # telefone -> empresas (CNPJ básico) que usam esse número
-    tel_contador = set()  # telefones de escritórios de contabilidade
+    municipios = mapa_municipios(trabalho, a.local)
+    db = abrir_banco(trabalho / "base.sqlite")
+    basicos = set()   # CNPJ básico das empresas que ficaram (para casar razão social e MEI)
     vistos = 0
 
-    # 1. Estabelecimentos: ativos dos nichos, com telefone ou e-mail
-    for nome in sorted(n for n in arquivos if n.lower().startswith("estabelecimentos")):
+    # 1. Estabelecimentos: ativos dos nichos, com telefone
+    for nome in [n for n in precisos if grupo(n) == 0]:
         caminho = obter(nome)
         log(f"lendo {nome}")
+        lote_est, lote_tel = [], []
         for c in linhas_zip(caminho):
             vistos += 1
-            if len(c) < 28 or c[5] != "02":
-                continue
-            nicho = CNAE_NICHO.get(c[11])
-            if not nicho:
+            if len(c) < 28 or c[5] != "02" or c[11] not in por_cnae:
                 continue
             fantasia = c[4].strip()
-            if nicho == "barbearia" and "BARB" not in fantasia.upper():
+            nicho = nicho_de(c[11], fantasia, "", por_cnae)
+            if not nicho:
                 continue
             t1, t2 = fone(c[21], c[22]), fone(c[23], c[24])
-            email = c[27].strip().lower()
             if not (t1 or t2):
                 continue
             mun = municipios.get(c[20].zfill(4))
@@ -208,95 +236,114 @@ def main():
             endereco = " ".join(x for x in [c[13].strip().title(), c[14].strip().title()] if x)
             if c[15].strip() and c[15].strip() not in ("S/N", "SN"):
                 endereco += ", " + c[15].strip()
-            linha = [c[0] + c[1] + c[2], fantasia, "", ibge, c[17].strip().title(), endereco, c[18].strip(), t1, t2,
-                     email if "@" in email else "", data_iso(c[10]), c[11], "", 0, None, 1 if c[3] == "1" else 2]
-            partes.setdefault((uf, nicho), []).append(linha)
-            precisa.setdefault(c[0], []).append(linha)
-            ddd_de[ibge] = ddd_mun
-            for t in (t1, t2):
-                if t:
-                    donos = uso_tel.setdefault(t, set())
-                    if len(donos) < 5:
-                        donos.add(c[0])
-                    if nicho == "contabilidade":
-                        tel_contador.add(t)
+            email = c[27].strip().lower()
+            lote_est.append((c[0], uf, nicho, ibge, ddd_mun, c[0] + c[1] + c[2], fantasia, c[17].strip().title(), endereco,
+                             c[18].strip(), t1, t2, email if "@" in email else "", data_iso(c[10]), c[11], 1 if c[3] == "1" else 2))
+            basicos.add(c[0])
+            for t in {t1, t2} - {""}:
+                lote_tel.append((t, c[0], 1 if nicho == "contabilidade" else 0))
+            if len(lote_est) >= 50000:
+                db.executemany("INSERT INTO est VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", lote_est)
+                db.executemany("INSERT INTO tel VALUES (?,?,?)", lote_tel)
+                lote_est, lote_tel = [], []
+        db.executemany("INSERT INTO est VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", lote_est)
+        db.executemany("INSERT INTO tel VALUES (?,?,?)", lote_tel)
+        db.commit()
         apagar(caminho)
-        log(f"  {sum(len(v) for v in partes.values())} estabelecimentos dos nichos até agora ({vistos} lidos)")
+        log(f"  {len(basicos):,} empresas dos nichos até agora ({vistos:,} linhas lidas)")
 
-    # 1b. Limpeza dos telefones: só fica número que é da própria empresa e da cidade dela.
-    #     Sai: DDD de outra região, número de escritório de contabilidade (quem abriu o CNPJ)
-    #     e número repetido em 3 ou mais empresas diferentes (central, contador ou despachante).
-    #     Sem nenhum número bom, a empresa sai da base.
+    # 1b. Telefones ruins: de escritório de contabilidade (quem abriu o CNPJ) ou repetidos
+    #     em 3 ou mais empresas diferentes (central, contador ou despachante).
+    log("procurando telefones repetidos e de contador")
+    repetidos = {t for (t,) in db.execute("SELECT t FROM tel GROUP BY t HAVING COUNT(DISTINCT basico) >= 3")}
+    tel_contador = {t for (t,) in db.execute("SELECT DISTINCT t FROM tel WHERE contador = 1")}
+    db.execute("DROP TABLE tel"); db.commit()
+    log(f"  {len(repetidos):,} números repetidos, {len(tel_contador):,} de contabilidade")
+
+    # 2. Empresas: razão social, porte e capital
+    for nome in [n for n in precisos if grupo(n) == 1]:
+        caminho = obter(nome)
+        log(f"lendo {nome}")
+        lote = []
+        for c in linhas_zip(caminho):
+            if not c or c[0] not in basicos:
+                continue
+            cap = c[4].replace(".", "").replace(",", ".") if len(c) > 4 else ""
+            try:
+                cap = float(cap) if cap else None
+            except ValueError:
+                cap = None
+            lote.append((c[0], c[1].strip(), PORTE.get(c[5], "") if len(c) > 5 else "", cap))
+            if len(lote) >= 50000:
+                db.executemany("INSERT OR REPLACE INTO emp VALUES (?,?,?,?)", lote); lote = []
+        db.executemany("INSERT OR REPLACE INTO emp VALUES (?,?,?,?)", lote); db.commit()
+        apagar(caminho)
+
+    # 3. Simples: quem é MEI
+    for nome in [n for n in precisos if grupo(n) == 2]:
+        caminho = obter(nome)
+        log(f"lendo {nome}")
+        lote = []
+        for c in linhas_zip(caminho):
+            if c and len(c) > 4 and c[4] == "S" and c[0] in basicos:
+                lote.append((c[0],))
+        db.executemany("INSERT OR IGNORE INTO mei VALUES (?)", lote); db.commit()
+        apagar(caminho)
+    basicos.clear()
+
+    # 4. Descrição das atividades (tabela de CNAEs da própria Receita)
+    cnae_desc = {}
+    for nome in [n for n in precisos if grupo(n) == 3]:
+        caminho = obter(nome)
+        for c in linhas_zip(caminho):
+            if len(c) >= 2 and c[0] in por_cnae:
+                cnae_desc[c[0]] = c[1].strip()
+        apagar(caminho)
+    for n in nichos:
+        for c in n["cnaes"]:
+            cnae_desc.setdefault(c, n["nome"])
+
+    # 5. Limpeza dos telefones e um arquivo por estado e nicho, compactado e cifrado.
+    #    Só fica número da própria empresa e com o DDD da cidade dela; sem número bom, a empresa sai.
+    log("gravando os arquivos")
+    db.execute("CREATE INDEX est_parte ON est(uf, nicho)"); db.commit()
+    manifesto = {"versao": 2, "mes": mes, "gerado_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                 "campos": CAMPOS, "cnae": cnae_desc,
+                 "nichos": {n["id"]: {"nome": n["nome"], "rotulo": n["rotulo"]} for n in nichos},
+                 "partes": {}}
     cortes = {"ddd": 0, "contador": 0, "repetido": 0, "sem_numero": 0}
-    for chave in list(partes):
-        nicho = chave[1]
-        boas = []
-        for l in partes[chave]:
-            ddd = ddd_de.get(l[3], "")
+    total = 0
+    sql = """SELECT e.cnpj, e.fantasia, COALESCE(m.razao, ''), e.ibge, e.bairro, e.endereco, e.cep, e.t1, e.t2, e.email,
+                    e.abertura, e.cnae, COALESCE(m.porte, ''), CASE WHEN s.basico IS NULL THEN 0 ELSE 1 END, m.capital, e.matriz, e.ddd
+             FROM est e LEFT JOIN emp m ON m.basico = e.basico LEFT JOIN mei s ON s.basico = e.basico
+             WHERE e.uf = ? AND e.nicho = ?"""
+    for uf, nicho in db.execute("SELECT DISTINCT uf, nicho FROM est ORDER BY uf, nicho").fetchall():
+        linhas = []
+        for r in db.execute(sql, (uf, nicho)):
+            l = list(r[:16]); ddd = r[16]
             fones = []
             for t in (l[7], l[8]):
-                if not t:
+                if not t or t in fones:
                     continue
                 if ddd and t[:2] != ddd:
                     cortes["ddd"] += 1; continue
                 if nicho != "contabilidade" and t in tel_contador:
                     cortes["contador"] += 1; continue
-                if len(uso_tel.get(t, ())) >= 3:
+                if t in repetidos:
                     cortes["repetido"] += 1; continue
                 fones.append(t)
-            fones.sort(key=lambda t: 0 if len(t) == 11 and t[2] == "9" else 1)  # celular primeiro
             if not fones:
                 cortes["sem_numero"] += 1
                 continue
+            fones.sort(key=lambda t: 0 if len(t) == 11 and t[2] == "9" else 1)  # celular primeiro
             l[7], l[8] = fones[0], (fones[1] if len(fones) > 1 else "")
             if nicho != "contabilidade" and re.search(r"contab|contador|escritorio", l[9] or ""):
                 l[9] = ""
-            boas.append(l)
-        partes[chave] = boas
-    log(f"limpeza dos telefones: {cortes}; ficaram {sum(len(v) for v in partes.values())} empresas")
-    uso_tel.clear(); tel_contador.clear()
-
-    # 2. Empresas: razão social, porte e capital
-    for nome in sorted(n for n in arquivos if n.lower().startswith("empresas")):
-        caminho = obter(nome)
-        log(f"lendo {nome}")
-        for c in linhas_zip(caminho):
-            ls = precisa.get(c[0]) if c else None
-            if not ls:
-                continue
-            cap = c[4].replace(".", "").replace(",", ".") if len(c) > 4 else ""
-            for l in ls:
-                l[2] = c[1].strip()
-                l[12] = PORTE.get(c[5], "") if len(c) > 5 else ""
-                try:
-                    l[14] = float(cap) if cap else None
-                except ValueError:
-                    pass
-        apagar(caminho)
-
-    # 3. Simples: quem é MEI
-    for nome in sorted(n for n in arquivos if n.lower().startswith("simples")):
-        caminho = obter(nome)
-        log(f"lendo {nome}")
-        for c in linhas_zip(caminho):
-            ls = precisa.get(c[0]) if c else None
-            if ls and len(c) > 4 and c[4] == "S":
-                for l in ls:
-                    l[13] = 1
-        apagar(caminho)
-
-    # 4. Um arquivo por estado e nicho, compactado e cifrado + manifesto aberto (só contagens)
-    manifesto = {"versao": 1, "mes": mes, "gerado_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                 "campos": ["cnpj", "fantasia", "razao", "ibge", "bairro", "endereco", "cep", "tel1", "tel2", "email",
-                            "abertura", "cnae", "porte", "mei", "capital", "matriz"],
-                 "cnae": CNAE_DESC, "partes": {}}
-    total = 0
-    for (uf, nicho), linhas in sorted(partes.items()):
-        if not linhas:
-            continue
-        for l in linhas:
             if not l[1]:
                 l[1] = l[2]
+            linhas.append(l)
+        if not linhas:
+            continue
         corpo = gzip.compress(json.dumps(linhas, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), 9)
         (saida / f"{uf}-{nicho}.bin").write_bytes(cifrar(corpo, chave_publica))
         cont = {}
@@ -305,11 +352,13 @@ def main():
         manifesto["partes"][f"{uf}-{nicho}"] = {"linhas": len(linhas), "municipios": cont}
         total += len(linhas)
     manifesto["total"] = total
-    (saida / "manifesto.json").write_text(json.dumps(manifesto, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     manifesto["limpeza"] = cortes
     (saida / "manifesto.json").write_text(json.dumps(manifesto, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    parar.set()
     pool.shutdown(wait=False, cancel_futures=True)
-    log(f"pronto: {total} empresas em {len(partes)} arquivos (mês {mes})")
+    db.close()
+    log(f"limpeza dos telefones: {cortes}")
+    log(f"pronto: {total:,} empresas em {len(manifesto['partes'])} arquivos (mês {mes})")
 
 
 if __name__ == "__main__":
