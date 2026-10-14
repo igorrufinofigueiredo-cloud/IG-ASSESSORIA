@@ -9,6 +9,7 @@ Uso: python scripts/processar_receita.py --saida saida/
 Teste local: python scripts/processar_receita.py --local pasta_com_zips --mes 2026-09 --saida saida/
 """
 import argparse, base64, csv, gzip, io, json, os, re, struct, sys, time, unicodedata, urllib.parse, urllib.request, zipfile
+from concurrent.futures import ThreadPoolExecutor
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -122,7 +123,7 @@ def cifrar(dados, chave_publica):
 
 
 def mapa_municipios(pasta, local):
-    """Código da Receita (SIAFI/TOM) -> (IBGE, nome, UF)."""
+    """Código da Receita (SIAFI/TOM) -> (IBGE, nome, UF, DDD)."""
     arq_m, arq_e = pasta / "municipios_ibge.csv", pasta / "estados_ibge.csv"
     if not local:
         baixar(MUNICIPIOS_IBGE, arq_m, auth=False)
@@ -134,7 +135,7 @@ def mapa_municipios(pasta, local):
     m = {}
     with open(arq_m, encoding="utf-8") as f:
         for r in csv.DictReader(f):
-            m[r["siafi_id"].zfill(4)] = (r["codigo_ibge"], r["nome"], uf[r["codigo_uf"]])
+            m[r["siafi_id"].zfill(4)] = (r["codigo_ibge"], r["nome"], uf[r["codigo_uf"]], r["ddd"])
     return m
 
 
@@ -159,10 +160,16 @@ def main():
         arquivos = dict(listar(mes + "/"))
         log(f"mês {mes}: {len(arquivos)} arquivos")
 
+    # O servidor da Receita é lento por conexão: baixa 4 arquivos ao mesmo tempo, já na ordem em que serão lidos.
+    precisos = sorted(n for n in arquivos if re.match(r"(estabelecimentos|empresas|simples)", n.lower()))
+    ordem = {n: i for i, n in enumerate(sorted(precisos, key=lambda n: (0 if n.lower().startswith("estab") else 1 if n.lower().startswith("empresas") else 2, n)))}
+    pool = ThreadPoolExecutor(max_workers=4)
+    futuros = {} if a.local else {n: pool.submit(baixar, f"{WEBDAV}{mes}/{n}", trabalho / n, arquivos.get(n, 0)) for n in sorted(precisos, key=ordem.get)}
+
     def obter(nome):
         if a.local:
             return trabalho / nome
-        return baixar(f"{WEBDAV}{mes}/{nome}", trabalho / nome, arquivos.get(nome, 0))
+        return futuros[nome].result()
 
     def apagar(p):
         if not a.local:
@@ -171,6 +178,9 @@ def main():
     municipios = mapa_municipios(trabalho if a.local else trabalho, a.local)
     partes = {}      # (uf, nicho) -> lista de linhas
     precisa = {}     # cnpj_basico -> [linhas que esperam razão social / porte / MEI]
+    ddd_de = {}      # código IBGE -> DDD da cidade
+    uso_tel = {}     # telefone -> empresas (CNPJ básico) que usam esse número
+    tel_contador = set()  # telefones de escritórios de contabilidade
     vistos = 0
 
     # 1. Estabelecimentos: ativos dos nichos, com telefone ou e-mail
@@ -189,12 +199,12 @@ def main():
                 continue
             t1, t2 = fone(c[21], c[22]), fone(c[23], c[24])
             email = c[27].strip().lower()
-            if not (t1 or t2 or "@" in email):
+            if not (t1 or t2):
                 continue
             mun = municipios.get(c[20].zfill(4))
             if not mun:
                 continue
-            ibge, _, uf = mun
+            ibge, _, uf, ddd_mun = mun
             endereco = " ".join(x for x in [c[13].strip().title(), c[14].strip().title()] if x)
             if c[15].strip() and c[15].strip() not in ("S/N", "SN"):
                 endereco += ", " + c[15].strip()
@@ -202,8 +212,49 @@ def main():
                      email if "@" in email else "", data_iso(c[10]), c[11], "", 0, None, 1 if c[3] == "1" else 2]
             partes.setdefault((uf, nicho), []).append(linha)
             precisa.setdefault(c[0], []).append(linha)
+            ddd_de[ibge] = ddd_mun
+            for t in (t1, t2):
+                if t:
+                    donos = uso_tel.setdefault(t, set())
+                    if len(donos) < 5:
+                        donos.add(c[0])
+                    if nicho == "contabilidade":
+                        tel_contador.add(t)
         apagar(caminho)
         log(f"  {sum(len(v) for v in partes.values())} estabelecimentos dos nichos até agora ({vistos} lidos)")
+
+    # 1b. Limpeza dos telefones: só fica número que é da própria empresa e da cidade dela.
+    #     Sai: DDD de outra região, número de escritório de contabilidade (quem abriu o CNPJ)
+    #     e número repetido em 3 ou mais empresas diferentes (central, contador ou despachante).
+    #     Sem nenhum número bom, a empresa sai da base.
+    cortes = {"ddd": 0, "contador": 0, "repetido": 0, "sem_numero": 0}
+    for chave in list(partes):
+        nicho = chave[1]
+        boas = []
+        for l in partes[chave]:
+            ddd = ddd_de.get(l[3], "")
+            fones = []
+            for t in (l[7], l[8]):
+                if not t:
+                    continue
+                if ddd and t[:2] != ddd:
+                    cortes["ddd"] += 1; continue
+                if nicho != "contabilidade" and t in tel_contador:
+                    cortes["contador"] += 1; continue
+                if len(uso_tel.get(t, ())) >= 3:
+                    cortes["repetido"] += 1; continue
+                fones.append(t)
+            fones.sort(key=lambda t: 0 if len(t) == 11 and t[2] == "9" else 1)  # celular primeiro
+            if not fones:
+                cortes["sem_numero"] += 1
+                continue
+            l[7], l[8] = fones[0], (fones[1] if len(fones) > 1 else "")
+            if nicho != "contabilidade" and re.search(r"contab|contador|escritorio", l[9] or ""):
+                l[9] = ""
+            boas.append(l)
+        partes[chave] = boas
+    log(f"limpeza dos telefones: {cortes}; ficaram {sum(len(v) for v in partes.values())} empresas")
+    uso_tel.clear(); tel_contador.clear()
 
     # 2. Empresas: razão social, porte e capital
     for nome in sorted(n for n in arquivos if n.lower().startswith("empresas")):
@@ -241,6 +292,8 @@ def main():
                  "cnae": CNAE_DESC, "partes": {}}
     total = 0
     for (uf, nicho), linhas in sorted(partes.items()):
+        if not linhas:
+            continue
         for l in linhas:
             if not l[1]:
                 l[1] = l[2]
@@ -253,6 +306,9 @@ def main():
         total += len(linhas)
     manifesto["total"] = total
     (saida / "manifesto.json").write_text(json.dumps(manifesto, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    manifesto["limpeza"] = cortes
+    (saida / "manifesto.json").write_text(json.dumps(manifesto, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    pool.shutdown(wait=False, cancel_futures=True)
     log(f"pronto: {total} empresas em {len(partes)} arquivos (mês {mes})")
 
 

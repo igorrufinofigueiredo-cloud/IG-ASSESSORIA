@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: base-receita
@@ -30,7 +31,19 @@ jobs:
           python-version: "3.12"
       - run: pip install cryptography==44.0.2
       - name: Processar a base
-        run: python scripts/processar_receita.py --saida saida ${{ github.event.inputs.mes && format('--mes {0}', github.event.inputs.mes) || '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MES_ARG: ${{ github.event.inputs.mes && format('--mes {0}', github.event.inputs.mes) || '' }}
+        run: |
+          # O andamento vai para a issue 1 a cada 2 minutos (dá para acompanhar sem abrir o log).
+          python -u scripts/processar_receita.py --saida saida $MES_ARG > log.txt 2>&1 &
+          PID=$!
+          atualizar() { gh api -X PATCH "repos/${{ github.repository }}/issues/1" -f body="$(printf '%s\n\n```\n%s\n```' "$1" "$(tail -n 40 log.txt)")" > /dev/null || true; }
+          while kill -0 $PID 2>/dev/null; do atualizar "Rodando desde $(date -u -d @$(stat -c %W log.txt) +%H:%M) UTC"; sleep 120; done
+          wait $PID; CODE=$?
+          if [ $CODE -eq 0 ]; then atualizar "Terminou bem em $(date -u +%F\ %H:%M) UTC"; else atualizar "Falhou (código $CODE) em $(date -u +%F\ %H:%M) UTC"; fi
+          cat log.txt
+          exit $CODE
       - name: Publicar no release do mês
         env:
           GH_TOKEN: ${{ github.token }}
