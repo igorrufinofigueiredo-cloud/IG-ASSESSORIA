@@ -77,26 +77,38 @@ def listar(caminho=""):
     return itens
 
 
-def baixar(url, destino, tamanho=0, auth=True, tentativas=10):
+def baixar(url, destino, tamanho=0, auth=True, tentativas=14):
+    """Baixa com retomada. Se a retomada (Range) falhar duas vezes seguidas sem receber nada,
+    o servidor provavelmente não aceita continuar aquele arquivo: apaga e baixa do zero."""
     destino.parent.mkdir(parents=True, exist_ok=True)
+    retomadas_vazias = 0
     for n in range(1, tentativas + 1):
         ja = destino.stat().st_size if destino.exists() else 0
         if tamanho and ja == tamanho:
             return destino
+        if tamanho and ja > tamanho:
+            destino.unlink(); ja = 0
+        if ja and retomadas_vazias >= 2:
+            log(f"  {destino.name}: a retomada não funciona, baixando do zero")
+            destino.unlink(); ja = 0; retomadas_vazias = 0
         hdr = {"Range": f"bytes={ja}-"} if ja else {}
+        recebido = 0
         try:
-            with urllib.request.urlopen(req(url, headers=hdr, auth=auth), timeout=180) as r, \
+            with urllib.request.urlopen(req(url, headers=hdr, auth=auth), timeout=300) as r, \
                     open(destino, "ab" if ja and r.status == 206 else "wb") as f:
                 while bloco := r.read(1 << 20):
                     f.write(bloco)
+                    recebido += len(bloco)
                     with _trava:
                         BAIXADO["bytes"] += len(bloco)
             if not tamanho or destino.stat().st_size == tamanho:
+                log(f"  baixado: {destino.name} ({destino.stat().st_size / 1e6:,.0f} MB)")
                 return destino
             raise IOError(f"tamanho {destino.stat().st_size} != {tamanho}")
         except Exception as e:  # a rede da Receita oscila: retoma de onde parou
-            log(f"  {destino.name}: tentativa {n}/{tentativas} falhou ({e})")
-            time.sleep(min(120, 15 * n))
+            retomadas_vazias = retomadas_vazias + 1 if (ja and recebido == 0) else 0
+            log(f"  {destino.name}: tentativa {n}/{tentativas} falhou depois de {recebido / 1e6:,.0f} MB ({e})")
+            time.sleep(min(90, 10 * n))
     raise RuntimeError(f"não consegui baixar {url}")
 
 
@@ -281,7 +293,10 @@ def main():
 
     # 3. Simples: quem é MEI
     for nome in [n for n in precisos if grupo(n) == 2]:
-        caminho = obter(nome)
+        try:
+            caminho = obter(nome)
+        except Exception as e:
+            log(f"  sem {nome} ({e}): a base sai sem a marcação de MEI"); continue
         log(f"lendo {nome}")
         lote = []
         for c in linhas_zip(caminho):
@@ -294,7 +309,10 @@ def main():
     # 4. Descrição das atividades (tabela de CNAEs da própria Receita)
     cnae_desc = {}
     for nome in [n for n in precisos if grupo(n) == 3]:
-        caminho = obter(nome)
+        try:
+            caminho = obter(nome)
+        except Exception as e:
+            log(f"  sem {nome} ({e})"); continue
         for c in linhas_zip(caminho):
             if len(c) >= 2 and c[0] in por_cnae:
                 cnae_desc[c[0]] = c[1].strip()
@@ -362,4 +380,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        log(f"ERRO: {e!r}")
+        os._exit(1)  # sem esperar os downloads que ainda estão em andamento
+    os._exit(0)
