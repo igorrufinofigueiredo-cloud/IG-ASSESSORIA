@@ -1,0 +1,43 @@
+# Gera a base de prospecção da IG Assessoria a partir dos dados abertos do CNPJ (Receita Federal).
+# Roda sozinho todo mês (a Receita publica o mês novo por volta do dia 15) e pode ser disparado à mão.
+# Os arquivos saem cifrados num release; só o CRM tem a chave para abrir.
+name: Base da Receita
+
+on:
+  schedule:
+    - cron: "0 9 18 * *"   # dia 18, 06:00 em Brasília
+  workflow_dispatch:
+    inputs:
+      mes:
+        description: "Mês AAAA-MM (vazio = o mais recente)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: base-receita
+  cancel-in-progress: false
+
+jobs:
+  gerar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install cryptography==44.0.2
+      - name: Processar a base
+        run: python scripts/processar_receita.py --saida saida ${{ github.event.inputs.mes && format('--mes {0}', github.event.inputs.mes) || '' }}
+      - name: Publicar no release do mês
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MES=$(python -c "import json;print(json.load(open('saida/manifesto.json'))['mes'])")
+          TAG="base-$MES"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" saida/* --title "Base da Receita $MES" --notes "Empresas ativas dos nichos da IG (arquivos cifrados). Gerado em $(date -u +%FT%TZ)." --latest
+          # Guarda só os dois últimos meses
+          gh release list --limit 50 --json tagName --jq '.[].tagName' | grep '^base-' | sort -r | tail -n +3 | while read t; do gh release delete "$t" --yes --cleanup-tag; done
