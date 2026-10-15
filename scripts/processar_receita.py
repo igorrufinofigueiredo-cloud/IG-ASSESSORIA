@@ -25,6 +25,7 @@ TOKEN = os.environ.get("RFB_SHARE_TOKEN", "YggdBLfdninEJX9")  # link público da
 MUNICIPIOS_IBGE = "https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/csv/municipios.csv"
 ESTADOS_IBGE = "https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/csv/estados.csv"
 PORTE = {"01": "MICRO EMPRESA", "03": "EMPRESA DE PEQUENO PORTE", "05": "DEMAIS"}
+POR_RELEASE = 900
 CAMPOS = ["cnpj", "fantasia", "razao", "ibge", "bairro", "endereco", "cep", "tel1", "tel2", "email",
           "abertura", "cnae", "porte", "mei", "capital", "matriz"]
 
@@ -333,7 +334,7 @@ def main():
     #    Só fica número da própria empresa e com o DDD da cidade dela; sem número bom, a empresa sai.
     log("gravando os arquivos")
     db.execute("CREATE INDEX est_parte ON est(uf, nicho)"); db.commit()
-    manifesto = {"versao": 2, "mes": mes, "gerado_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    manifesto = {"versao": 3, "mes": mes, "gerado_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                  "campos": CAMPOS, "cnae": cnae_desc,
                  "nichos": {n["id"]: {"nome": n["nome"], "rotulo": n["rotulo"]} for n in nichos},
                  "partes": {}}
@@ -371,11 +372,14 @@ def main():
         if not linhas:
             continue
         corpo = gzip.compress(json.dumps(linhas, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), 9)
-        (saida / f"{uf}-{nicho}.bin").write_bytes(cifrar(corpo, chave_publica))
+        # Um release do GitHub aceita até 1000 arquivos: as partes vão em pastas de 900 (um release por pasta).
+        rel = len(manifesto["partes"]) // POR_RELEASE
+        (saida / f"rel{rel}").mkdir(exist_ok=True)
+        (saida / f"rel{rel}" / f"{uf}-{nicho}.bin").write_bytes(cifrar(corpo, chave_publica))
         cont = {}
         for l in linhas:
             cont[l[3]] = cont.get(l[3], 0) + 1
-        manifesto["partes"][f"{uf}-{nicho}"] = {"linhas": len(linhas), "municipios": cont}
+        manifesto["partes"][f"{uf}-{nicho}"] = {"linhas": len(linhas), "municipios": cont, "rel": rel}
         total += len(linhas)
     manifesto["total"] = total
     manifesto["limpeza"] = cortes
