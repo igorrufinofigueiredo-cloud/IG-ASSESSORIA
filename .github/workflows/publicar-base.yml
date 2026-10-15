@@ -1,0 +1,42 @@
+# Publica de novo a base gerada por uma execução anterior de "Base da Receita" (sem baixar a Receita outra vez).
+name: Publicar base da Receita
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID da execução de Base da Receita que gerou o artefato saida"
+        required: true
+
+permissions:
+  contents: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: base-receita
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: saida
+          path: saida
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Publicar nos releases do mês
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python -u scripts/publicar.py saida > pub.txt 2>&1
+          CODE=$?
+          if [ $CODE -eq 0 ]; then T="Base publicada em $(date -u +%F\ %H:%M) UTC"; else T="Publicação falhou (código $CODE) em $(date -u +%F\ %H:%M) UTC"; fi
+          gh api -X PATCH "repos/${{ github.repository }}/issues/1" -f body="$(printf '%s\n\n```\n%s\n```' "$T" "$(tail -n 40 pub.txt)")" > /dev/null || true
+          cat pub.txt
+          exit $CODE
