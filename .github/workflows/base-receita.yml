@@ -45,22 +45,32 @@ jobs:
           if [ $CODE -eq 0 ]; then atualizar "Terminou bem em $(date -u +%F\ %H:%M) UTC"; else atualizar "Falhou (código $CODE) em $(date -u +%F\ %H:%M) UTC"; fi
           cat log.txt
           exit $CODE
-      - name: Publicar no release do mês
+      # A base vai como artefato: se a publicação falhar, dá para refazer só o job "publicar" sem baixar tudo de novo.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: saida
+          path: saida
+          retention-days: 5
+          compression-level: 0
+
+  publicar:
+    needs: gerar
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: saida
+          path: saida
+      - name: Publicar nos releases do mês
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          MES=$(python -c "import json;print(json.load(open('saida/manifesto.json'))['mes'])")
-          TAG="base-$MES"
-          # Release principal (manifesto + saida/rel0) e um release extra por pasta seguinte (base-MES-2, -3...):
-          # o GitHub aceita até 1000 arquivos por release.
-          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -E "^$TAG(-[0-9]+)?$" | while read t; do gh release delete "$t" --yes --cleanup-tag; done
-          for d in $(ls -d saida/rel* | sort -V | tail -n +2); do
-            n=$(( ${d#saida/rel} + 1 ))
-            gh release create "$TAG-$n" $d/* --title "Base da Receita $MES (parte $n)" --notes "Continuação de $TAG." --latest=false
-          done
-          gh release create "$TAG" saida/manifesto.json saida/rel0/* --title "Base da Receita $MES" --notes "Empresas ativas dos nichos da IG (arquivos cifrados). Gerado em $(date -u +%FT%TZ)." --latest
-          # Guarda só os dois últimos meses
-          MESES=$(gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -oE '^base-[0-9]{4}-[0-9]{2}' | sort -u | sort -r | head -2 | tr '\n' ' ')
-          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep '^base-' | while read t; do
-            m=$(echo "$t" | grep -oE '^base-[0-9]{4}-[0-9]{2}'); case " $MESES " in *" $m "*) ;; *) gh release delete "$t" --yes --cleanup-tag;; esac
-          done
+          set +e
+          python -u scripts/publicar.py saida > pub.txt 2>&1
+          CODE=$?
+          if [ $CODE -eq 0 ]; then T="Base publicada em $(date -u +%F\ %H:%M) UTC"; else T="Publicação falhou (código $CODE) em $(date -u +%F\ %H:%M) UTC"; fi
+          gh api -X PATCH "repos/${{ github.repository }}/issues/1" -f body="$(printf '%s\n\n```\n%s\n```' "$T" "$(tail -n 40 pub.txt)")" > /dev/null || true
+          cat pub.txt
+          exit $CODE
