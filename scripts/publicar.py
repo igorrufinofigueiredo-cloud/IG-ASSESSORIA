@@ -51,7 +51,25 @@ def releases():
 
 
 def apagar(rel):
-    chamar("DELETE", f"{API}/releases/{rel['id']}")
+    # Release com centenas de arquivos dá 502 ao apagar de uma vez: tira os arquivos um a um antes.
+    n = 0
+    while True:
+        assets = chamar("GET", f"{API}/releases/{rel['id']}/assets?per_page=100") or []
+        if not assets:
+            break
+        for a in assets:
+            try:
+                chamar("DELETE", f"{API}/releases/assets/{a['id']}")
+            except RuntimeError as e:
+                if "-> 404" not in str(e):
+                    raise
+            n += 1
+        log(f"  {rel['tag_name']}: {n} arquivos antigos apagados")
+    try:
+        chamar("DELETE", f"{API}/releases/{rel['id']}")
+    except RuntimeError as e:
+        if "-> 404" not in str(e):
+            raise
     if not rel.get("draft"):
         try:
             chamar("DELETE", f"{API}/git/refs/tags/{urllib.parse.quote(rel['tag_name'])}")
