@@ -132,6 +132,8 @@ def linhas_zip(caminho):
 def fone(ddd, num):
     d = re.sub(r"\D", "", (ddd or "") + (num or ""))
     d = d.lstrip("0")
+    if len(d) == 10 and d[2] in "6789":  # celular no formato antigo, sem o 9 na frente
+        d = d[:2] + "9" + d[2:]
     return d if 10 <= len(d) <= 11 else ""
 
 
