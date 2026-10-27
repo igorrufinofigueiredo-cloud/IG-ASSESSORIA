@@ -1,0 +1,23 @@
+name: baixar-imagens-gamma
+on:
+  push:
+    branches: [tmp-gamma-imagens]
+permissions:
+  contents: write
+jobs:
+  baixar:
+    if: "!contains(github.event.head_commit.message, '[imagens]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p gamma
+          curl -fsSL -o gamma/penhascos.jpg "https://cdn.gamma.app/pt8a9nlmze2y93t/design-anything/gytF6o3fuMprtKgmqVIrf/CxFzVUUPcZ1XDi-LuIrtt.jpg"
+          curl -fsSL -o gamma/mesa.jpg "https://cdn.gamma.app/pt8a9nlmze2y93t/design-anything/thpsnwnBaUdnRrevuz1C4/HONZUPAGu_P60XElO6-GX.jpg"
+          curl -fsSL -o gamma/poltrona.jpg "https://cdn.gamma.app/pt8a9nlmze2y93t/design-anything/fi0psDDCEyPBGSXYJnCfW/q8UQMt9t5imtxvOnsVtZN.jpg"
+          ls -la gamma
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add gamma
+          git commit -m "[imagens] gamma"
+          git push
