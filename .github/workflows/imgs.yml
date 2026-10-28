@@ -1,106 +1,17 @@
-name: gen4
+name: baixar
 on: push
 permissions:
   contents: write
 jobs:
-  gen:
+  get:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - name: ombro
-          w: 1024
-          h: 768
-          p: Editorial photograph of a physiotherapist's hands guiding a Brazilian woman's shoulder rehabilitation exercise with a dark blue elastic resistance band, minimalist physiotherapy clinic with a deep navy blue wall, soft directional window light, calm and precise, shallow depth of field, 50mm lens, realistic skin and fabric texture, documentary photography
-        - name: plano
-          w: 1024
-          h: 768
-          p: Editorial photograph of a female physiotherapist in navy scrubs and a middle-aged Brazilian man sitting at a light oak desk, looking together at a printed treatment plan sheet, both slightly smiling, minimalist clinic interior with a deep navy blue wall and soft daylight, 35mm lens, realistic documentary photography
-        - name: corrida
-          w: 832
-          h: 1024
-          p: Editorial photograph of a fit Brazilian man in his thirties jogging on a seaside promenade at sunrise, ocean softly blurred behind, wearing a navy t-shirt, calm determined expression, cool blue morning light, 85mm lens, realistic skin texture, sports documentary photography
-        - name: palco
-          w: 1024
-          h: 768
-          p: Photograph of a dark modern conference auditorium seen from the back rows, one large flat rectangular projection screen on the stage glowing solid bright green, a single speaker in silhouette standing on the stage to the right of the screen, rows of audience heads in black silhouette in the foreground, black room, subtle blue haze, cinematic event photography
-        - name: garrafa
-          w: 768
-          h: 1024
-          p: Studio product photograph of a matte deep navy blue stainless steel water bottle with a black cap standing upright on a pale blue gray stone surface beside a folded white towel, soft light from the upper left, gentle shadow, plain blank bottle without any print, ultra realistic material texture, 80mm lens
-        - name: ecobag
-          w: 768
-          h: 1024
-          p: Studio photograph of a person in a black t-shirt holding a plain deep navy blue cotton canvas tote bag flat in front of the body, the bag facing the camera, blank bag without any print, visible canvas weave texture, soft studio light, dark gray background, 50mm lens, ultra realistic
-        - name: joelho
-          w: 768
-          h: 1024
-          p: Editorial photograph inside a minimalist physiotherapy clinic, a female physiotherapist in navy scrubs gently assessing the knee of a forty year old Brazilian man sitting on a treatment table, soft natural window light from the left, deep navy blue walls, pale gray floor, calm precise mood, shallow depth of field, 50mm lens, realistic skin texture, documentary photography
-        - name: escada
-          w: 768
-          h: 1024
-          p: Candid editorial photograph of a smiling Brazilian woman in her fifties walking up outdoor concrete stairs in soft morning light, light gray sweatshirt and navy trousers, relaxed confident expression, city softly blurred behind, cool blue tones, 85mm lens, natural skin texture, documentary photography
     steps:
-    - uses: actions/checkout@v4
-    - name: binario
-      run: 'mkdir -p out; exec > >(tee -a out/log_${{ matrix.name }}.txt) 2>&1
-
-        set -x
-
-        curl -s https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/latest > rel.json
-
-        python3 -c "import json;[print(a[''name'']) for a in json.load(open(''rel.json''))[''assets'']]"
-
-        URL=$(python3 -c "
-
-        import json
-
-        a=json.load(open(''rel.json''))[''assets'']
-
-        c=[x for x in a if x[''name''].endswith(''Linux-Ubuntu-24.04-x86_64.zip'')]
-
-        print(c[0][''browser_download_url''])")
-
-        curl -sL -o sd.zip "$URL" && mkdir sdbin && cd sdbin && unzip -q ../sd.zip && ls -la && find . -type f -name ''sd*'' '
-      continue-on-error: true
-      shell: bash
-    - name: modelos
-      run: 'mkdir -p out; exec > >(tee -a out/log_${{ matrix.name }}.txt) 2>&1
-
-        set -x
-
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache || true
-
-        df -h .
-
-        mkdir -p m && cd m
-
-        H=https://huggingface.co
-
-        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o flux.gguf $H/second-state/FLUX.1-schnell-GGUF/resolve/main/flux1-schnell-Q4_0.gguf || curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o flux.gguf $H/leejet/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-q4_0.gguf
-
-        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o ae.safetensors $H/second-state/FLUX.1-schnell-GGUF/resolve/main/ae.safetensors
-
-        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o clip_l.safetensors $H/second-state/FLUX.1-schnell-GGUF/resolve/main/clip_l.safetensors
-
-        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o t5.gguf $H/second-state/FLUX.1-schnell-GGUF/resolve/main/t5xxl-Q8_0.gguf
-
-        ls -la
-
-        df -h .'
-      continue-on-error: true
-      shell: bash
-    - name: gerar
-      run: "mkdir -p out; exec > >(tee -a out/log_${{ matrix.name }}.txt) 2>&1\nset -x\nSD=$(find sdbin -type f -name 'sd' -o -type f -name 'sd-cli' | head -1); chmod +x $SD; export LD_LIBRARY_PATH=$(dirname $SD):$LD_LIBRARY_PATH\nmkdir -p out\nfor S in 7 31; do\n date\n time $SD --diffusion-model m/flux.gguf --vae m/ae.safetensors --clip_l m/clip_l.safetensors --t5xxl m/t5.gguf -p \"${{ matrix.p }}\" --cfg-scale 1.0 --sampling-method euler --steps 4 -W ${{ matrix.w }} -H ${{ matrix.h }} -s $S -t 4 -o out/${{ matrix.name }}_$S.png || true\ndone\nls -la out"
-      continue-on-error: true
-      shell: bash
-    - name: enviar
-      run: 'git config user.name bot; git config user.email bot@users.noreply.github.com
-
-        git add -f out || true; git commit -m "img ${{ matrix.name }}" || exit 0
-
-        for i in 1 2 3 4 5 6 7 8; do git pull --rebase -q origin tmp-prumo-imagens && git push -q origin HEAD:tmp-prumo-imagens && break; sleep $((RANDOM%10+3)); done'
-      if: always()
-      shell: bash
+      - uses: actions/checkout@v4
+      - name: baixar
+        run: |
+          mkdir -p fotos
+          curl -sfL -o fotos/joelho.png 'https://export-download.canva.com/Z_804/DAHZSmZ_804/-1/0/0002-4946598679556773446.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH5AO7UJ26%2F20261028%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20261028T062105Z&X-Amz-Expires=22104&X-Amz-Signature=9812a84b138f164435be7b3e58cf5662259005ab6737b4239f954af1e29c84f9&X-Amz-SignedHeaders=host%3Bx-amz-expected-bucket-owner&response-expires=Wed%2C%2028%20Oct%202026%2012%3A29%3A29%20GMT'
+          curl -sfL -o fotos/escada.png 'https://export-download.canva.com/Z_804/DAHZSmZ_804/-1/0/0003-4946598679556773446.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH5AO7UJ26%2F20261027%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20261027T164822Z&X-Amz-Expires=69067&X-Amz-Signature=16cfc75be5aa7bd328dab74d35bc1c7bbfa1903a70232b348b324ccbd7256d24&X-Amz-SignedHeaders=host%3Bx-amz-expected-bucket-owner&response-expires=Wed%2C%2028%20Oct%202026%2011%3A59%3A29%20GMT'
+          ls -la fotos
+          git config user.name bot; git config user.email bot@users.noreply.github.com
+          git add fotos; git commit -m fotos; git push
