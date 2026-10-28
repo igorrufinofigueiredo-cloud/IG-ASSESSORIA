@@ -1,4 +1,4 @@
-name: gen2
+name: gen3
 on: push
 permissions:
   contents: write
@@ -10,18 +10,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - name: joelho
-          w: 768
-          h: 1024
-          p: Editorial photograph inside a minimalist physiotherapy clinic, a female physiotherapist in navy scrubs gently assessing the knee of a forty year old Brazilian man sitting on a treatment table, soft natural window light from the left, deep navy blue walls, pale gray floor, calm precise mood, shallow depth of field, 50mm lens, realistic skin texture, documentary photography
-        - name: escada
-          w: 768
-          h: 1024
-          p: Candid editorial photograph of a smiling Brazilian woman in her fifties walking up outdoor concrete stairs in soft morning light, light gray sweatshirt and navy trousers, relaxed confident expression, city softly blurred behind, cool blue tones, 85mm lens, natural skin texture, documentary photography
+        - name: debug
+          w: 512
+          h: 512
+          p: a photo of a navy blue water bottle on a stone table
     steps:
     - uses: actions/checkout@v4
     - name: binario
-      run: 'set -x
+      run: 'mkdir -p out; exec > >(tee -a out/log_${{ matrix.name }}.txt) 2>&1
+
+        set -x
 
         curl -s https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/latest > rel.json
 
@@ -38,8 +36,12 @@ jobs:
         print(c[0][''browser_download_url''])")
 
         curl -sL -o sd.zip "$URL" && mkdir sdbin && cd sdbin && unzip -q ../sd.zip && ls -la && find . -type f -name ''sd*'' '
+      continue-on-error: true
+      shell: bash
     - name: modelos
-      run: 'set -x
+      run: 'mkdir -p out; exec > >(tee -a out/log_${{ matrix.name }}.txt) 2>&1
+
+        set -x
 
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache || true
 
@@ -49,20 +51,28 @@ jobs:
 
         H=https://huggingface.co
 
-        curl -sfL -o flux.gguf $H/second-state/FLUX.1-schnell-GGUF/resolve/main/flux1-schnell-Q4_0.gguf || curl -sfL -o flux.gguf $H/leejet/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-q4_0.gguf
+        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o flux.gguf $H/second-state/FLUX.1-schnell-GGUF/resolve/main/flux1-schnell-Q4_0.gguf || curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o flux.gguf $H/leejet/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-q4_0.gguf
 
-        curl -sfL -o ae.safetensors $H/second-state/FLUX.1-schnell-GGUF/resolve/main/ae.safetensors
+        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o ae.safetensors $H/second-state/FLUX.1-schnell-GGUF/resolve/main/ae.safetensors
 
-        curl -sfL -o clip_l.safetensors $H/second-state/FLUX.1-schnell-GGUF/resolve/main/clip_l.safetensors
+        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o clip_l.safetensors $H/second-state/FLUX.1-schnell-GGUF/resolve/main/clip_l.safetensors
 
-        curl -sfL -o t5.gguf $H/second-state/FLUX.1-schnell-GGUF/resolve/main/t5xxl-Q8_0.gguf
+        curl -fL --retry 3 -w "%{http_code} %{size_download}\n" -o t5.gguf $H/second-state/FLUX.1-schnell-GGUF/resolve/main/t5xxl-Q8_0.gguf
 
-        ls -la'
+        ls -la
+
+        df -h .'
+      continue-on-error: true
+      shell: bash
     - name: gerar
-      run: "set -x\nSD=$(find sdbin -type f -name 'sd' -o -type f -name 'sd-cli' | head -1); chmod +x $SD; export LD_LIBRARY_PATH=$(dirname $SD):$LD_LIBRARY_PATH\nmkdir -p out\nfor S in 7 31; do\n time $SD --diffusion-model m/flux.gguf --vae m/ae.safetensors --clip_l m/clip_l.safetensors --t5xxl m/t5.gguf -p \"${{ matrix.p }}\" --cfg-scale 1.0 --sampling-method euler --steps 4 -W ${{ matrix.w }} -H ${{ matrix.h }} -s $S -t 4 -o out/${{ matrix.name }}_$S.png || true\ndone\nls -la out"
+      run: "mkdir -p out; exec > >(tee -a out/log_${{ matrix.name }}.txt) 2>&1\nset -x\nSD=$(find sdbin -type f -name 'sd' -o -type f -name 'sd-cli' | head -1); chmod +x $SD; export LD_LIBRARY_PATH=$(dirname $SD):$LD_LIBRARY_PATH\nmkdir -p out\nfor S in 7 31; do\n time $SD --diffusion-model m/flux.gguf --vae m/ae.safetensors --clip_l m/clip_l.safetensors --t5xxl m/t5.gguf -p \"${{ matrix.p }}\" --cfg-scale 1.0 --sampling-method euler --steps 4 -W ${{ matrix.w }} -H ${{ matrix.h }} -s $S -t 4 -o out/${{ matrix.name }}_$S.png || true\ndone\nls -la out"
+      continue-on-error: true
+      shell: bash
     - name: enviar
       run: 'git config user.name bot; git config user.email bot@users.noreply.github.com
 
-        git add out || true; git commit -m "img ${{ matrix.name }}" || exit 0
+        git add -f out || true; git commit -m "img ${{ matrix.name }}" || exit 0
 
         for i in 1 2 3 4 5 6 7 8; do git pull --rebase -q origin tmp-prumo-imagens && git push -q origin HEAD:tmp-prumo-imagens && break; sleep $((RANDOM%10+3)); done'
+      if: always()
+      shell: bash
