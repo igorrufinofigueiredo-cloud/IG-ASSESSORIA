@@ -1,4 +1,4 @@
-name: gen
+name: gen2
 on: push
 permissions:
   contents: write
@@ -10,30 +10,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - name: ombro
-          w: 1024
-          h: 768
-          p: Editorial photograph of a physiotherapist's hands guiding a Brazilian woman's shoulder rehabilitation exercise with a dark blue elastic resistance band, minimalist physiotherapy clinic with a deep navy blue wall, soft directional window light, calm and precise, shallow depth of field, 50mm lens, realistic skin and fabric texture, documentary photography
-        - name: plano
-          w: 1024
-          h: 768
-          p: Editorial photograph of a female physiotherapist in navy scrubs and a middle-aged Brazilian man sitting at a light oak desk, looking together at a printed treatment plan sheet with a calendar grid, both slightly smiling, minimalist clinic interior with a deep navy blue wall and soft daylight, 35mm lens, realistic documentary photography
-        - name: corrida
-          w: 832
-          h: 1024
-          p: Editorial photograph of a fit Brazilian man in his thirties jogging on a seaside promenade at sunrise, ocean softly blurred behind, wearing a navy t-shirt, calm determined expression, cool blue morning light, 85mm lens, realistic skin texture, sports documentary photography
-        - name: palco
-          w: 1024
-          h: 768
-          p: Photograph of a dark modern conference auditorium seen from the back rows, one large flat rectangular projection screen on the stage glowing solid bright green, a single speaker in silhouette standing on the stage to the right of the screen, rows of audience heads in black silhouette in the foreground, black room, subtle blue haze, cinematic event photography
-        - name: garrafa
+        - name: joelho
           w: 768
           h: 1024
-          p: Studio product photograph of a matte deep navy blue stainless steel water bottle with a black cap standing upright on a pale blue gray stone surface beside a folded white towel, soft light from the upper left, gentle shadow, plain blank bottle without any print, ultra realistic material texture, 80mm lens
-        - name: ecobag
+          p: Editorial photograph inside a minimalist physiotherapy clinic, a female physiotherapist in navy scrubs gently assessing the knee of a forty year old Brazilian man sitting on a treatment table, soft natural window light from the left, deep navy blue walls, pale gray floor, calm precise mood, shallow depth of field, 50mm lens, realistic skin texture, documentary photography
+        - name: escada
           w: 768
           h: 1024
-          p: Studio photograph of a person in a black t-shirt holding a plain deep navy blue cotton canvas tote bag flat in front of the body, the bag facing the camera, blank bag without any print, visible canvas weave texture, soft studio light, dark gray background, 50mm lens, ultra realistic
+          p: Candid editorial photograph of a smiling Brazilian woman in her fifties walking up outdoor concrete stairs in soft morning light, light gray sweatshirt and navy trousers, relaxed confident expression, city softly blurred behind, cool blue tones, 85mm lens, natural skin texture, documentary photography
     steps:
     - uses: actions/checkout@v4
     - name: binario
