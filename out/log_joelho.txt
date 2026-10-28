@@ -1,0 +1,157 @@
++ curl -s https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/latest
++ python3 -c 'import json;[print(a['\''name'\'']) for a in json.load(open('\''rel.json'\''))['\''assets'\'']]'
+cudart-sd-bin-win-cu12-x64.zip
+sd-master-be48649-bin-Darwin-macOS-26.6.2-arm64.zip
+sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64-rocm-10.1.0.zip
+sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip
+sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64.zip
+sd-master-be48649-bin-win-cpu-x64.zip
+sd-master-be48649-bin-win-cuda12-x64.zip
+sd-master-be48649-bin-win-rocm-10.1.0-x64.zip
+sd-master-be48649-bin-win-vulkan-x64.zip
+++ python3 -c '
+import json
+a=json.load(open('\''rel.json'\''))['\''assets'\'']
+c=[x for x in a if x['\''name'\''].endswith('\''Linux-Ubuntu-24.04-x86_64.zip'\'')]
+print(c[0]['\''browser_download_url'\''])'
++ URL=https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1017-be48649/sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64.zip
++ curl -sL -o sd.zip https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1017-be48649/sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64.zip
++ mkdir sdbin
++ cd sdbin
++ unzip -q ../sd.zip
++ ls -la
+total 69120
+drwxr-xr-x 2 runner runner     4096 Oct 28 10:09 .
+drwxr-xr-x 6 runner runner     4096 Oct 28 10:09 ..
+-rw-r--r-- 1 runner runner     1078 Oct 26 16:51 ggml.txt
+-rwxr-xr-x 1 runner runner   934712 Oct 26 16:34 libggml-base.so
+-rwxr-xr-x 1 runner runner   934712 Oct 26 16:34 libggml-base.so.0
+-rwxr-xr-x 1 runner runner   934712 Oct 26 16:34 libggml-base.so.0.27.0
+-rwxr-xr-x 1 runner runner  1308496 Oct 26 16:40 libggml-cpu-alderlake.so
+-rwxr-xr-x 1 runner runner  1415104 Oct 26 16:38 libggml-cpu-cannonlake.so
+-rwxr-xr-x 1 runner runner  1423000 Oct 26 16:38 libggml-cpu-cascadelake.so
+-rwxr-xr-x 1 runner runner  1423000 Oct 26 16:39 libggml-cpu-cooperlake.so
+-rwxr-xr-x 1 runner runner  1312592 Oct 26 16:37 libggml-cpu-haswell.so
+-rwxr-xr-x 1 runner runner  1423000 Oct 26 16:39 libggml-cpu-icelake.so
+-rwxr-xr-x 1 runner runner  1237192 Oct 26 16:36 libggml-cpu-ivybridge.so
+-rwxr-xr-x 1 runner runner  1237192 Oct 26 16:36 libggml-cpu-piledriver.so
+-rwxr-xr-x 1 runner runner  1257792 Oct 26 16:36 libggml-cpu-sandybridge.so
+-rwxr-xr-x 1 runner runner  1668784 Oct 26 16:34 libggml-cpu-sapphirerapids.so
+-rwxr-xr-x 1 runner runner  1415104 Oct 26 16:37 libggml-cpu-skylakex.so
+-rwxr-xr-x 1 runner runner  1023584 Oct 26 16:35 libggml-cpu-sse42.so
+-rwxr-xr-x 1 runner runner  1023664 Oct 26 16:35 libggml-cpu-x64.so
+-rwxr-xr-x 1 runner runner  1423000 Oct 26 16:40 libggml-cpu-zen4.so
+-rwxr-xr-x 1 runner runner    55960 Oct 26 16:40 libggml.so
+-rwxr-xr-x 1 runner runner    55960 Oct 26 16:40 libggml.so.0
+-rwxr-xr-x 1 runner runner    55960 Oct 26 16:40 libggml.so.0.27.0
+-rwxr-xr-x 1 runner runner    50608 Oct 26 16:49 libsharpyuv.so
+-rwxr-xr-x 1 runner runner    50608 Oct 26 16:49 libsharpyuv.so.0
+-rwxr-xr-x 1 runner runner    50608 Oct 26 16:49 libsharpyuv.so.0.1.2
+-rwxr-xr-x 1 runner runner 41734688 Oct 26 16:49 libstable-diffusion.so
+-rwxr-xr-x 1 runner runner   311864 Oct 26 16:49 libwebm.so
+-rwxr-xr-x 1 runner runner   796912 Oct 26 16:49 libwebp.so
+-rwxr-xr-x 1 runner runner   796912 Oct 26 16:49 libwebp.so.7
+-rwxr-xr-x 1 runner runner   796912 Oct 26 16:49 libwebp.so.7.2.0
+-rwxr-xr-x 1 runner runner    57336 Oct 26 16:49 libwebpmux.so
+-rwxr-xr-x 1 runner runner    57336 Oct 26 16:49 libwebpmux.so.3
+-rwxr-xr-x 1 runner runner    57336 Oct 26 16:49 libwebpmux.so.3.1.2
+-rwxr-xr-x 1 runner runner  1477928 Oct 26 16:50 sd-cli
+-rwxr-xr-x 1 runner runner  2880672 Oct 26 16:51 sd-server
+-rw-r--r-- 1 runner runner     1062 Oct 26 16:51 stable-diffusion.cpp.txt
+-rw-r--r-- 1 runner runner     1127 Oct 26 16:33 start-server.bat
+-rwxr-xr-x 1 runner runner     1381 Oct 26 16:33 start-server.sh
++ find . -type f -name 'sd*'
+./sd-cli
+./sd-server
++ sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
++ df -h .
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       145G   37G  108G  26% /
++ mkdir -p m
++ cd m
++ H=https://huggingface.co
++ curl -fL --retry 3 -w '%{http_code} %{size_download}\n' -o flux.gguf https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/main/flux1-schnell-Q4_0.gguf
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  1068  100  1068    0     0  20371      0 --:--:-- --:--:-- --:--:-- 20538
+  1 6378M    1 93.7M    0     0   129M      0  0:00:49 --:--:--  0:00:49  129M  8 6378M    8  543M    0     0   314M      0  0:00:20  0:00:01  0:00:19  449M 16 6378M   16 1020M    0     0   376M      0  0:00:16  0:00:02  0:00:14  465M 23 6378M   23 1512M    0     0   407M      0  0:00:15  0:00:03  0:00:12  474M 29 6378M   29 1896M    0     0   402M      0  0:00:15  0:00:04  0:00:11  451M 36 6378M   36 2328M    0     0   407M      0  0:00:15  0:00:05  0:00:10  447M 43 6378M   43 2753M    0     0   410M      0  0:00:15  0:00:06  0:00:09  442M 50 6378M   50 3209M    0     0   416M      0  0:00:15  0:00:07  0:00:08  437M 57 6378M   57 3691M    0     0   423M      0  0:00:15  0:00:08  0:00:07  435M 65 6378M   65 4183M    0     0   430M      0  0:00:14  0:00:09  0:00:05  457M 71 6378M   71 4564M    0     0   425M      0  0:00:14  0:00:10  0:00:04  447M 73 6378M   73 4691M    0     0   400M      0  0:00:15  0:00:11  0:00:04  387M 78 6378M   78 4989M    0     0   392M      0  0:00:16  0:00:12  0:00:04  355M 81 6378M   81 5205M    0     0   379M      0  0:00:16  0:00:13  0:00:03  302M 84 6378M   84 5403M    0     0   366M      0  0:00:17  0:00:14  0:00:03  242M 87 6378M   87 5559M    0     0   353M      0  0:00:18  0:00:15  0:00:03  199M 90 6378M   90 5792M    0     0   346M      0  0:00:18  0:00:16  0:00:02  219M 93 6378M   93 5967M    0     0   336M      0  0:00:18  0:00:17  0:00:01  194M 96 6378M   96 6129M    0     0   327M      0  0:00:19  0:00:18  0:00:01  184M 99 6378M   99 6328M    0     0   320M      0  0:00:19  0:00:19 --:--:--  186M100 6378M  100 6378M    0     0   321M      0  0:00:19  0:00:19 --:--:--  197M
+200 6688845536
++ curl -fL --retry 3 -w '%{http_code} %{size_download}\n' -o ae.safetensors https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/main/ae.safetensors
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  1030  100  1030    0     0  22511      0 --:--:-- --:--:-- --:--:-- 22888
+ 68  319M   68  219M    0     0   261M      0  0:00:01 --:--:--  0:00:01  261M100  319M  100  319M    0     0   286M      0  0:00:01  0:00:01 --:--:--  364M
+200 335304388
++ curl -fL --retry 3 -w '%{http_code} %{size_download}\n' -o clip_l.safetensors https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/main/clip_l.safetensors
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  1048  100  1048    0     0  25439      0 --:--:-- --:--:-- --:--:-- 25560
+ 65  234M   65  154M    0     0   216M      0  0:00:01 --:--:--  0:00:01  216M100  234M  100  234M    0     0   274M      0 --:--:-- --:--:-- --:--:--  570M
+200 246144152
++ curl -fL --retry 3 -w '%{http_code} %{size_download}\n' -o t5.gguf https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/main/t5xxl-Q8_0.gguf
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  1032  100  1032    0     0  25953      0 --:--:-- --:--:-- --:--:-- 26461
+  0 4958M    0 37.6M    0     0  44.2M      0  0:01:52 --:--:--  0:01:52 44.2M  4 4958M    4  209M    0     0   113M      0  0:00:43  0:00:01  0:00:42  171M  8 4958M    8  419M    0     0   147M      0  0:00:33  0:00:02  0:00:31  190M 12 4958M   12  618M    0     0   160M      0  0:00:30  0:00:03  0:00:27  193M 16 4958M   16  816M    0     0   168M      0  0:00:29  0:00:04  0:00:25  194M 20 4958M   20 1013M    0     0   173M      0  0:00:28  0:00:05  0:00:23  195M 24 4958M   24 1213M    0     0   177M      0  0:00:27  0:00:06  0:00:21  200M 28 4958M   28 1426M    0     0   181M      0  0:00:27  0:00:07  0:00:20  201M 32 4958M   32 1629M    0     0   184M      0  0:00:26  0:00:08  0:00:18  202M 37 4958M   37 1863M    0     0   189M      0  0:00:26  0:00:09  0:00:17  209M 41 4958M   41 2071M    0     0   190M      0  0:00:25  0:00:10  0:00:15  211M 45 4958M   45 2269M    0     0   191M      0  0:00:25  0:00:11  0:00:14  211M 50 4958M   50 2487M    0     0   193M      0  0:00:25  0:00:12  0:00:13  212M 52 4958M   52 2621M    0     0   189M      0  0:00:26  0:00:13  0:00:13  198M 58 4958M   58 2877M    0     0   193M      0  0:00:25  0:00:14  0:00:11  200M 61 4958M   61 3069M    0     0   193M      0  0:00:25  0:00:15  0:00:10  199M 65 4958M   65 3260M    0     0   193M      0  0:00:25  0:00:16  0:00:09  197M 69 4958M   69 3453M    0     0   193M      0  0:00:25  0:00:17  0:00:08  193M 73 4958M   73 3647M    0     0   193M      0  0:00:25  0:00:18  0:00:07  205M 77 4958M   77 3846M    0     0   193M      0  0:00:25  0:00:19  0:00:06  195M 81 4958M   81 4054M    0     0   194M      0  0:00:25  0:00:20  0:00:05  196M 85 4958M   85 4247M    0     0   193M      0  0:00:25  0:00:21  0:00:04  194M 89 4958M   89 4452M    0     0   194M      0  0:00:25  0:00:22  0:00:03  199M 93 4958M   93 4653M    0     0   195M      0  0:00:25  0:00:23  0:00:02  201M100 4958M  100 4958M    0     0   199M      0  0:00:24  0:00:24 --:--:--  222M
+200 5199794784
++ ls -la
+total 12177852
+drwxr-xr-x 2 runner runner       4096 Oct 28 10:11 .
+drwxr-xr-x 7 runner runner       4096 Oct 28 10:11 ..
+-rw-r--r-- 1 runner runner  335304388 Oct 28 10:11 ae.safetensors
+-rw-r--r-- 1 runner runner  246144152 Oct 28 10:11 clip_l.safetensors
+-rw-r--r-- 1 runner runner 6688845536 Oct 28 10:11 flux.gguf
+-rw-r--r-- 1 runner runner 5199794784 Oct 28 10:12 t5.gguf
++ df -h .
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       145G   49G   96G  34% /
+++ find sdbin -type f -name sd -o -type f -name sd-cli
+++ head -1
++ SD=sdbin/sd-cli
++ chmod +x sdbin/sd-cli
+++ dirname sdbin/sd-cli
++ export LD_LIBRARY_PATH=sdbin:
++ LD_LIBRARY_PATH=sdbin:
++ mkdir -p out
++ for S in 7 31
++ date
+Wed Oct 28 10:12:09 UTC 2026
++ sdbin/sd-cli --diffusion-model m/flux.gguf --vae m/ae.safetensors --clip_l m/clip_l.safetensors --t5xxl m/t5.gguf -p 'Editorial photograph inside a minimalist physiotherapy clinic, a female physiotherapist in navy scrubs gently assessing the knee of a forty year old Brazilian man sitting on a treatment table, soft natural window light from the left, deep navy blue walls, pale gray floor, calm precise mood, shallow depth of field, 50mm lens, realistic skin texture, documentary photography' --cfg-scale 1.0 --sampling-method euler --steps 4 -W 768 -H 1024 -s 7 -t 4 -o out/joelho_7.png
+load_backend: loaded CPU backend from /home/runner/work/IG-ASSESSORIA/IG-ASSESSORIA/sdbin/libggml-cpu-haswell.so
+[I] loading diffusion model from 'm/flux.gguf' --- diffusion_engine.cpp:692
+[I] load m/flux.gguf using gguf format --- model_loader.cpp:216
+[I] loading clip_l from 'm/clip_l.safetensors' --- diffusion_engine.cpp:713
+[I] load m/clip_l.safetensors using safetensors format --- model_loader.cpp:222
+[I] loading t5xxl from 'm/t5.gguf' --- diffusion_engine.cpp:734
+[I] load m/t5.gguf using gguf format --- model_loader.cpp:216
+[I] loading vae from 'm/ae.safetensors' --- diffusion_engine.cpp:763
+[I] load m/ae.safetensors using safetensors format --- model_loader.cpp:222
+[I] Version: Flux  --- diffusion_engine.cpp:975
+[W] auto-fit: no GPU devices; using the default backend --- backend_fit.cpp:444
+[I] Weight type stat:                      f32: 244  |     f16: 196  |    q4_0: 776  |    q8_0: 220   --- diffusion_engine.cpp:1548
+[I] Conditioner weight type stat:          f16: 196  |    q8_0: 220   --- diffusion_engine.cpp:1549
+[I] Diffusion model weight type stat:     q4_0: 776   --- diffusion_engine.cpp:1550
+[I] VAE weight type stat:                  f32: 244   --- diffusion_engine.cpp:1551
+[I] using VAE for encoding / decoding --- model_builders.cpp:210
+[I] vae decoder: ch = 128 --- auto_encoder_kl.hpp:529
+[I] flash attention auto: CPU -> on (CPU) --- flash_attn.cpp:66
+[I] conv2d direct auto: CPU -> off (no implicit GEMM path) --- conv_direct.cpp:90
+[I] conv3d direct auto: CPU -> off (no implicit GEMM path) --- conv_direct.cpp:90
+[I] total params memory size = 11610.19MB (VRAM 0.00MB, RAM 11610.19MB): text_encoders 5061.17MB(RAM), diffusion_model 6389.02MB(RAM), vae 160.00MB(RAM), controlnet 0.00MB(N/A), extensions 0.00MB(N/A) --- diffusion_engine.cpp:1423
+[I] running in Flux FLOW mode --- diffusion_engine.cpp:1483
+[I] generate_image 768x1024 --- image.cpp:869
+[I] Using 'flux_kontext' preset for reference images --- diffusion_engine.cpp:3103
+[I] get_sigmas with Flux scheduler --- denoiser.hpp:1196
+[I] sampling using Euler method --- request.cpp:477
+[I] clip build cached graph cut plan done (taking 0 ms) --- ggml_graph_cut.cpp:1032
+  |#                                                 |   2/196 -   0.00MB/s[K  |##################################################| 196/196 -   1.14GB/s[K
+[I] loading tensors completed, taking 0.20s (read: 0.04s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1400
+[I] t5 build cached graph cut plan done (taking 2 ms) --- ggml_graph_cut.cpp:1032
+  |#                                                 |   3/219 -   0.00MB/s[K  |###########                                       |  48/219 -   4.17GB/s[K  |###################                               |  83/219 -   3.89GB/s[K  |###########################                       | 116/219 -   3.76GB/s[K  |###################################               | 152/219 -   3.77GB/s[K  |##########################################        | 183/219 -   3.68GB/s[K  |##################################################| 219/219 -   3.67GB/s[K
+[I] loading tensors completed, taking 1.28s (read: 1.23s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1400
+[I] get_learned_condition completed, taking 27.04s --- image.cpp:580
+[I] generating image: 1/1 - seed 7 --- image.cpp:920
+[I] flux build cached graph cut plan done (taking 4 ms) --- ggml_graph_cut.cpp:1032
+  |#                                                 |   3/776 -   0.00MB/s[K  |###                                               |  34/776 - 781.11MB/s[K  |###                                               |  46/776 - 617.29MB/s[K  |####                                              |  58/776 - 563.62MB/s[K  |#####                                             |  63/776 - 530.39MB/s[K  |#####                                             |  74/776 - 495.28MB/s[K  |######                                            |  84/776 - 446.59MB/s[K  |#######                                           |  94/776 - 437.06MB/s[K  |#######                                           | 106/776 - 439.39MB/s[K  |########                                          | 118/776 - 441.20MB/s[K  |#########                                         | 130/776 - 442.66MB/s[K  |##########                                        | 141/776 - 443.85MB/s[K  |##########                                        | 149/776 - 434.11MB/s[K  |###########                                       | 156/776 - 416.33MB/s[K  |###########                                       | 167/776 - 419.14MB/s[K  |############                                      | 178/776 - 416.52MB/s[K  |#############                                     | 190/776 - 418.97MB/s[K  |##############                                    | 202/776 - 421.13MB/s[K  |##############                                    | 212/776 - 421.64MB/s[K  |###############                                   | 220/776 - 412.79MB/s[K  |###############                                   | 229/776 - 414.93MB/s[K  |################                                  | 240/776 - 409.55MB/s[K  |#################                                 | 250/776 - 408.20MB/s[K  |#################                                 | 262/776 - 410.26MB/s[K  |##################                                | 274/776 - 412.16MB/s[K  |###################                               | 285/776 - 413.90MB/s[K  |###################                               | 293/776 - 410.64MB/s[K  |####################                              | 301/776 - 408.56MB/s[K  |#####################                             | 311/776 - 407.53MB/s[K  |#####################                             | 323/776 - 406.58MB/s[K  |######################                            | 334/776 - 405.69MB/s[K  |#######################                           | 346/776 - 407.24MB/s[K  |########################                          | 357/776 - 408.75MB/s[K  |########################                          | 367/776 - 407.11MB/s[K  |#########################                         | 377/776 - 407.79MB/s[K  |#########################                         | 384/776 - 401.93MB/s[K  |##########################                        | 396/776 - 407.64MB/s[K  |###########################                       | 406/776 - 402.79MB/s[K  |###########################                       | 418/776 - 404.18MB/s[K  |############################                      | 430/776 - 405.50MB/s[K  |#############################                     | 440/776 - 406.13MB/s[K  |#############################                     | 449/776 - 404.82MB/s[K  |##############################                    | 457/776 - 402.41MB/s[K  |###############################                   | 468/776 - 400.15MB/s[K  |###############################                   | 477/776 - 403.14MB/s[K  |################################                  | 488/776 - 402.62MB/s[K  |################################                  | 496/776 - 402.12MB/s[K  |#################################                 | 501/776 - 401.65MB/s[K  |#################################                 | 512/776 - 401.19MB/s[K  |##################################                | 520/776 - 400.75MB/s[K  |##################################                | 522/776 - 396.29MB/s[K  |##################################                | 527/776 - 392.45MB/s[K  |###################################               | 528/776 - 384.91MB/s[K  |###################################               | 535/776 - 384.81MB/s[K  |###################################               | 536/776 - 377.69MB/s[K  |###################################               | 540/776 - 377.73MB/s[K  |####################################              | 544/776 - 370.99MB/s[K  |####################################              | 547/776 - 368.92MB/s[K  |####################################              | 549/776 - 364.75MB/s[K  |####################################              | 552/776 - 358.57MB/s[K  |####################################              | 557/776 - 358.89MB/s[K  |#####################################             | 560/776 - 353.01MB/s[K  |#####################################             | 560/776 - 347.32MB/s[K  |#####################################             | 564/776 - 345.83MB/s[K  |#####################################             | 573/776 - 348.34MB/s[K  |######################################            | 580/776 - 346.87MB/s[K  |######################################            | 588/776 - 347.37MB/s[K  |#######################################           | 600/776 - 349.74MB/s[K  |#######################################           | 604/776 - 347.58MB/s[K  |########################################          | 615/776 - 350.61MB/s[K  |#########################################         | 624/776 - 351.00MB/s[K  |#########################################         | 632/776 - 351.41MB/s[K  |##########################################        | 640/776 - 351.80MB/s[K  |##########################################        | 648/776 - 352.19MB/s[K  |###########################################       | 656/776 - 352.56MB/s[K  |###########################################       | 664/776 - 352.92MB/s[K  |############################################      | 672/776 - 353.28MB/s[K  |############################################      | 680/776 - 353.62MB/s[K  |#############################################     | 688/776 - 353.95MB/s[K  |#############################################     | 696/776 - 354.26MB/s[K  |##############################################    | 704/776 - 354.58MB/s[K  |##############################################    | 712/776 - 354.89MB/s[K  |###############################################   | 721/776 - 357.35MB/s[K  |###############################################   | 728/776 - 355.49MB/s[K  |################################################  | 736/776 - 355.78MB/s[K  |################################################  | 744/776 - 356.06MB/s[K  |################################################# | 752/776 - 356.33MB/s[K  |##################################################| 761/776 - 357.48MB/s[K  |##################################################| 773/776 - 359.19MB/s[K  |##################################################| 776/776 - 358.15MB/s[K
+[I] loading tensors completed, taking 17.81s (read: 17.62s, memcpy: 0.00s, convert: 0.01s, copy_to_backend: 0.00s) --- model_loader.cpp:1400
+  |============>                                     | 1/4 - 659.34s/it - ETA 32:58[K  |=========================>                        | 2/4 - 641.37s/it - ETA 21:40[K
