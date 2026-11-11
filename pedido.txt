@@ -1,0 +1,16 @@
+/
+/index.html
+/prospeccao.html
+/sw.js
+/service-worker.js
+/manifest.json
+/manifest.webmanifest
+/netlify.toml
+/buscar-arquivos.sh
+/_headers
+/_redirects
+/acabamento-v7.css
+/icon-192.png
+/icon-512.png
+/contrato.html
+/assinar.html

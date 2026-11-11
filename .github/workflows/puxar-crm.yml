@@ -1,0 +1,33 @@
+# Temporário: copia os arquivos publicados do CRM para esta branch, para a edição local.
+name: Puxar CRM publicado
+on:
+  push:
+    branches: [claude/puxar-crm]
+    paths: [pedido.txt]
+permissions:
+  contents: write
+jobs:
+  puxar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Baixar
+        run: |
+          mkdir -p puxado && cd puxado
+          B=https://ig-assessoria-crm.netlify.app
+          for p in $(cat ../pedido.txt); do
+            f=$(echo "$p" | sed 's#^/##; s#/$#/index.html#'); [ -z "$f" ] && f=raiz.html
+            mkdir -p "$(dirname "$f")"
+            code=$(curl -sS -L -o "$f" -w "%{http_code}" "$B$p" || echo erro)
+            echo "$code $p $(stat -c %s "$f" 2>/dev/null)" >> ../puxado-status.txt
+            [ "$code" = "200" ] || rm -f "$f"
+          done
+          curl -sSI "$B/" > ../puxado-headers.txt || true
+          for u in https://www.igassessoria.com.br/ https://igassessoria.com.br/ https://igorrufinofigueiredo-cloud.github.io/IG-ASSESSORIA-OFICIAL/; do
+            echo "== $u" >> ../dominio.txt; curl -sS -o /dev/null -L -w "%{http_code} final=%{url_effective} ssl=%{ssl_verify_result}\n" "$u" >> ../dominio.txt 2>&1 || echo falhou >> ../dominio.txt
+          done
+      - name: Gravar
+        run: |
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add -A puxado puxado-status.txt puxado-headers.txt dominio.txt
+          git commit -m "Arquivos do CRM publicado" && git push
