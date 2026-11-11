@@ -1,0 +1,6 @@
+== https://www.igassessoria.com.br/
+200 final=https://igassessoria.com.br/ ssl=0
+== https://igassessoria.com.br/
+200 final=https://igassessoria.com.br/ ssl=0
+== https://igorrufinofigueiredo-cloud.github.io/IG-ASSESSORIA-OFICIAL/
+200 final=http://igassessoria.com.br/ ssl=0

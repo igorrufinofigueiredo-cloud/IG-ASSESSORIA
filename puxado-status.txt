@@ -1,0 +1,16 @@
+200 / 1130554
+200 /index.html 1130554
+200 /prospeccao.html 372308
+200 /sw.js 1362
+404 /service-worker.js 3984
+404 /manifest.json 3984
+200 /manifest.webmanifest 599
+404 /netlify.toml 3984
+404 /buscar-arquivos.sh 3984
+404 /_headers 3984
+404 /_redirects 3984
+404 /acabamento-v7.css 3984
+404 /icon-192.png 3984
+404 /icon-512.png 3984
+404 /contrato.html 3984
+404 /assinar.html 3984
