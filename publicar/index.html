@@ -8506,7 +8506,7 @@ function setSyncEstado(estado, msg){
 
 
 /* ===================== SAÚDE DO SISTEMA (Configurações) ===================== */
-const IG_VERSAO_CRM = '8.5';
+const IG_VERSAO_CRM = '8.5.1';
 let igErros = [];
 try{ igErros = JSON.parse(localStorage.getItem(STORAGE_PREFIX+'erros') || '[]') || []; }catch(e){ igErros = []; }
 function igGuardarErro(msg){
@@ -11920,6 +11920,32 @@ function ctLigarNovidades(){
   document.getElementById('ct-det').addEventListener('click', ctAcaoDetalhe);
 }
 try{ ctLigarNovidades(); }catch(e){ console.warn('contratos v2: ligações', e); }
+
+/* ---------- domínio oficial: o endereço antigo do site não volta mais nas mensagens ---------- */
+const IG_SITE_OFICIAL = 'https://www.igassessoria.com.br';
+const IG_SITE_ANTIGO = /https?(?::\/\/|%3A%2F%2F)igorrufinofigueiredo-cloud\.github\.io(?:\/|%2F)IG-ASSESSORIA-OFICIAL(?:\/|%2F)?/i;
+const IG_SITE_ANTIGO_G = new RegExp(IG_SITE_ANTIGO.source, 'gi');
+function igTrocarDominio(t){
+  if(typeof t !== 'string' || !IG_SITE_ANTIGO.test(t)) return t;
+  return t.replace(IG_SITE_ANTIGO_G, m=> /%3A/i.test(m) ? 'https%3A%2F%2Fwww.igassessoria.com.br' : IG_SITE_OFICIAL);
+}
+function igMigrarDominioLeads(){
+  if(typeof leads === 'undefined' || !Array.isArray(leads)) return 0;
+  let n = 0;
+  leads.forEach(l=>{ if(!l) return; Object.keys(l).forEach(k=>{ const v = igTrocarDominio(l[k]); if(v !== l[k]){ l[k] = v; n++; } }); });
+  if(n){ try{ storageSet('leads', leads); }catch(e){} try{ if(typeof renderAll === 'function') renderAll(); }catch(e){} }
+  return n;
+}
+if(typeof aplicarSnapshot === 'function'){
+  const aplicarSnapshotV1 = aplicarSnapshot;
+  aplicarSnapshot = function(){ const r = aplicarSnapshotV1.apply(this, arguments); try{ igMigrarDominioLeads(); }catch(e){} return r; };
+}
+if(typeof window.igMensagemAbordagem === 'function'){
+  const msgV1 = window.igMensagemAbordagem;
+  window.igMensagemAbordagem = function(){ return igTrocarDominio(msgV1.apply(this, arguments)); };
+}
+[1500, 6000, 15000].forEach(ms=> setTimeout(()=>{ try{ igMigrarDominioLeads(); }catch(e){} }, ms));
+setInterval(()=>{ try{ igMigrarDominioLeads(); }catch(e){} }, 60000);
 
 </script>
 </body>
